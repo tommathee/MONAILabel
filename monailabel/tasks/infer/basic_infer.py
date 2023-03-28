@@ -13,11 +13,16 @@ import copy
 import logging
 import os
 import time
+import json
 from abc import abstractmethod
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from apps.pathology.model.config import TensorflowConfig
+from monailabel.tasks.infer.custom_infere import custom_infere
+import numpy as np
 
 import torch
+import tensorflow as tf
 from monai.data import decollate_batch
 from monai.inferers import Inferer, SimpleInferer, SlidingWindowInferer
 
@@ -62,6 +67,8 @@ class BasicInferTask(InferTask):
         preload=False,
         train_mode=False,
         skip_writer=False,
+        tensorflow: bool = False,
+        model_name: str = None
     ):
         """
         :param path: Model File Path. Supports multiple paths to support versions (Last item will be picked as latest)
@@ -81,7 +88,6 @@ class BasicInferTask(InferTask):
         :param train_mode: Run in Train mode instead of eval (when network has dropouts)
         :param skip_writer: Skip Writer and return data dictionary
         """
-
         super().__init__(type, labels, dimension, description, config)
 
         self.path = [] if not path else [path] if isinstance(path, str) else path
@@ -94,6 +100,10 @@ class BasicInferTask(InferTask):
         self.roi_size = roi_size
         self.train_mode = train_mode
         self.skip_writer = skip_writer
+        self.tensorflow = tensorflow
+        self.model_name = model_name
+
+        print(f"{self.path}")
 
         self._networks: Dict = {}
 
@@ -268,10 +278,12 @@ class BasicInferTask(InferTask):
         req.update(request)
 
         model_filename = req.get("model_filename", "model.pt")
+        print(f'281 MODEL{model_filename}')
         model_filename = model_filename if isinstance(model_filename, str) else model_filename[0]
         self.path.append(os.path.join(os.path.dirname(self.path[0]), model_filename)) if self.path and isinstance(
             self.path, list
         ) else self.path
+        print(f'284 PATH{self.path}')
 
         # device
         device = req.get("device", "cuda")
@@ -436,28 +448,48 @@ class BasicInferTask(InferTask):
         cached = self._networks.get(device)
         statbuf = os.stat(path) if path else None
         network = None
-        if cached:
+        if cached and not self.tensorflow:
             if statbuf and statbuf.st_mtime == cached[1]:
                 network = cached[0]
             elif statbuf:
                 logger.warning(f"Reload model from cache.  Prev ts: {cached[1]}; Current ts: {statbuf.st_mtime}")
 
+        # TODO: handle tensorflow model better than this hack
+        print(f'458 {self.tensorflow}')
         if network is None:
             if self.network:
-                network = copy.deepcopy(self.network)
-                network.to(torch.device(device))
+                if not self.tensorflow:
+                    network = copy.deepcopy(self.network)
+                    network.to(torch.device(device))
 
-                if path:
-                    checkpoint = torch.load(path, map_location=torch.device(device))
-                    model_state_dict = checkpoint.get(self.model_state_dict, checkpoint)
-                    network.load_state_dict(model_state_dict, strict=self.load_strict)
+                    if path:
+                        checkpoint = torch.load(path, map_location=torch.device(device))
+                        model_state_dict = checkpoint.get(self.model_state_dict, checkpoint)
+                        network.load_state_dict(model_state_dict, strict=self.load_strict)
+                else:
+                    if path or len(self.path) > 0:
+                        # TODO: get custom model here
+                        print(f'472 {path}')
+                        configs = TensorflowConfig().get_config(self.model_name)
+                        models = TensorflowConfig().get_model(self.model_name)
+                        network = []
+
+                        assert len(models) == len(configs), "Number of models and configs should be same"
+                        for idx, config_path in enumerate(configs):
+                            logger.info(f"Loading config: {config_path}")
+                            config = json.load(open(config_path))
+                            print(config)
+                            network.append(models[idx](config).create_model())
+                            network[idx].load_weights(self.path[idx].replace('.index', ''))
+
             else:
                 network = torch.jit.load(path, map_location=torch.device(device))
 
-            if self.train_mode:
-                network.train()
-            else:
-                network.eval()
+            if not self.tensorflow:
+                if self.train_mode:
+                    network.train()
+                else:
+                    network.eval()
             self._networks[device] = (network, statbuf.st_mtime if statbuf else 0)
 
         return network
@@ -476,27 +508,51 @@ class BasicInferTask(InferTask):
         inferer = self.inferer(data)
         logger.info(f"Inferer:: {device} => {inferer.__class__.__name__} => {inferer.__dict__}")
 
+        # TODO: handle tensorflow model better than this hack
         network = self._get_network(device)
         if network:
-            inputs = data[self.input_key]
-            inputs = inputs if torch.is_tensor(inputs) else torch.from_numpy(inputs)
-            inputs = inputs[None] if convert_to_batch else inputs
-            inputs = inputs.to(torch.device(device))
+            if not self.tensorflow:
+                inputs = data[self.input_key]
+                print(inputs.shape)
+                inputs = inputs if torch.is_tensor(inputs) else torch.from_numpy(inputs)
+                inputs = inputs[None] if convert_to_batch else inputs
+                inputs = inputs.to(torch.device(device))
 
-            with torch.no_grad():
-                outputs = inferer(inputs, network)
+                with torch.no_grad():
+                    outputs = inferer(inputs, network)
 
-            if device.startswith("cuda"):
-                torch.cuda.empty_cache()
+                if device.startswith("cuda"):
+                    torch.cuda.empty_cache()
 
-            if convert_to_batch:
-                if isinstance(outputs, dict):
-                    outputs_d = decollate_batch(outputs)
-                    outputs = outputs_d[0]
-                else:
-                    outputs = outputs[0]
+                if convert_to_batch:
+                    if isinstance(outputs, dict):
+                        outputs_d = decollate_batch(outputs)
+                        outputs = outputs_d[0]
+                    else:
+                        outputs = outputs[0]
 
-            data[self.output_label_key] = outputs
+                data[self.output_label_key] = outputs
+            else:
+                configs = []
+                configs_paths = TensorflowConfig().get_config(self.model_name)
+                for config in configs_paths:
+                    configs.append(json.load(open(config)))
+
+                inputs = data[self.input_key]
+                inputs = inputs.cpu().numpy()
+                inputs = inputs if isinstance(inputs, tf.Tensor) else tf.convert_to_tensor(inputs)
+                #inputs = tf.expand_dims(inputs, 0) if convert_to_batch else inputs
+
+                # print(f'inputs: {inputs.shape}')
+                # np.save('inputs.npy', inputs[0])
+                # print(self.output_label_key)
+                data[self.output_label_key] = custom_infere(network, inputs, configs)
+                # TODO: add custom inference
+                #outputs = inferer(inputs, network)
+                # if convert_to_batch:
+                #    outputs = outputs[0]
+
+                #data[self.output_label_key] = outputs.numpy()
         else:
             # consider them as callable transforms
             data = run_transforms(data, inferer, log_prefix="INF", log_name="Inferer")
@@ -527,7 +583,8 @@ class BasicInferTask(InferTask):
 
         if hasattr(detector, "inferer"):
             logger.info(
-                f"Detector Inferer:: {device} => {detector.inferer.__class__.__name__} => {detector.inferer.__dict__}"  # type: ignore
+                # type: ignore
+                f"Detector Inferer:: {device} => {detector.inferer.__class__.__name__} => {detector.inferer.__dict__}"
             )
 
         network = self._get_network(device)

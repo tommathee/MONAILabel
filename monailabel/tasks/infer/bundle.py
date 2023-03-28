@@ -87,8 +87,10 @@ class BundleInferTask(BasicInferTask):
         extend_load_image: bool = True,
         add_post_restore: bool = True,
         dropout: float = 0.0,
+        tensorflow: bool = False,
         **kwargs,
     ):
+        print('I am here bundle.py')
         self.valid: bool = False
         self.const = const if const else BundleConstants()
 
@@ -107,23 +109,41 @@ class BundleInferTask(BasicInferTask):
         unload_module("scripts")
 
         self.bundle_config = ConfigParser()
+        print('Reading', os.path.join(path, "configs", config_paths[0]))
         self.bundle_config.read_config(os.path.join(path, "configs", config_paths[0]))
         self.bundle_config.config.update({self.const.key_bundle_root(): path})  # type: ignore
         if self.dropout > 0:
             self.bundle_config["network_def"]["dropout"] = self.dropout
 
         network = None
-        model_path = os.path.join(path, "models", self.const.model_pytorch())
-        if os.path.exists(model_path):
-            network = self.bundle_config.get_parsed_content(self.const.key_network_def(), instantiate=True)
+
+        model_paths = self.const.model_pytorch()
+        print('121 model_paths', model_paths)
+        if isinstance(model_paths, str):
+            model_paths = os.path.join(path, "models", model_paths)
+            if os.path.exists(model_paths):
+                print('I am here already')
+                network = self.bundle_config.get_parsed_content(self.const.key_network_def(), instantiate=True)
+            else:
+                model_paths = os.path.join(path, "models", self.const.model_torchscript())
+                if not os.path.exists(model_paths):
+                    logger.warning(
+                        f"Ignore {path} as neither {self.const.model_pytorch()} nor {self.const.model_torchscript()} exists"
+                    )
+                    sys.path.remove(self.bundle_path)
+                    return
         else:
-            model_path = os.path.join(path, "models", self.const.model_torchscript())
-            if not os.path.exists(model_path):
-                logger.warning(
-                    f"Ignore {path} as neither {self.const.model_pytorch()} nor {self.const.model_torchscript()} exists"
-                )
-                sys.path.remove(self.bundle_path)
-                return
+            for idx, model_path in enumerate(model_paths):
+                model_path = os.path.join(path, "models", model_path)
+                if os.path.exists(model_path):
+                    model_paths[idx] = model_path
+                    network = self.bundle_config.get_parsed_content(self.const.key_network_def(), instantiate=True)
+                else:
+                    logger.warning(
+                        f"Ignore {path} as neither {self.const.model_pytorch()} nor {self.const.model_torchscript()} exists"
+                    )
+                    sys.path.remove(self.bundle_path)
+                    return
 
         # https://docs.monai.io/en/latest/mb_specification.html#metadata-json-file
         with open(os.path.join(path, "configs", self.const.metadata_json())) as fp:
@@ -142,20 +162,30 @@ class BundleInferTask(BasicInferTask):
         self.add_post_restore = False if type == "detection" else add_post_restore
 
         super().__init__(
-            path=model_path,
+            path=model_paths,
             network=network,
             type=type,
             labels=labels,
             dimension=dimension,
             description=description,
             preload=strtobool(conf.get("preload", "false")),
+            tensorflow=tensorflow,
+            model_name=self.bundle_config.get("model_name", None),
             **kwargs,
         )
 
         # Add models options if more than one model is provided by bundle.
-        pytorch_models = [os.path.basename(p) for p in glob.glob(os.path.join(path, "models", "*.pt"))]
-        pytorch_models.sort(key=len)
-        self._config.update({"model_filename": pytorch_models})
+        if not tensorflow:
+            pytorch_models = [os.path.basename(p) for p in glob.glob(os.path.join(path, "models", "*.pt"))]
+            pytorch_models.sort(key=len)
+            print('Models', pytorch_models)
+            self._config.update({"model_filename": pytorch_models})
+        else:
+            tensorflow_models = [os.path.basename(p) for p in glob.glob(os.path.join(path, "models", "*.index"))]
+            tensorflow_models.sort(key=len)
+            print('Models', tensorflow_models)
+            self._config.update({"model_filename": tensorflow_models})
+
         # Add bundle's loadable params to MONAI Label config, load exposed keys and params to options panel
         for k in self.const.key_displayable_configs():
             if self.bundle_config.get(k):
