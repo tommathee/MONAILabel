@@ -218,7 +218,7 @@ class MONAILabelApp:
             "version": self.version,
             "labels": self.labels,
             "models": {k: v.info() for k, v in self._infers.items() if v.is_valid()},
-            "trainers": {k: v.info() for k, v in self._trainers.items()},
+            # "trainers": {k: v.info() for k, v in self._trainers.items()},
             "strategies": {k: v.info() for k, v in self._strategies.items()},
             "scoring": {k: v.info() for k, v in self._scoring_methods.items()},
             "train_stats": {k: v.stats() for k, v in self._trainers.items()},
