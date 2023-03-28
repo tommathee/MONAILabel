@@ -1,0 +1,24 @@
+{
+  "name": "new-dataset",
+  "description": "New Dataset",
+  "images_dir": ".",
+  "labels_dir": "labels",
+  "objects": {
+    "JP2K-33003-1": {
+      "image": {
+        "ext": ".svs",
+        "info": {
+          "ts": 1679420509,
+          "name": "JP2K-33003-1.svs",
+          "strategy": {
+            "wsi_random": {
+              "ts": 1679946772,
+              "client_id": "admin"
+            }
+          }
+        }
+      },
+      "labels": {}
+    }
+  }
+}

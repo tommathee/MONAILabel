@@ -1,0 +1,47 @@
+{
+  "dataset_name": "IKEM",
+  "model": "DeepLabV3+",
+  "lab": 0,
+  "overlay": 1,
+  "image_size": 512,
+  "channels": 3,
+  "input_images": 1,
+  "output_masks": 1,
+  "batch_size": 4,
+  "epochs": 25,
+  "padding": "same",
+  "filters": 32,
+  "classes": [
+    "inflammations",
+    "blood_vessels",
+    "endocariums"
+  ],
+  "final_classes": [
+    "background",
+    "inflammations",
+    "blood_vessels",
+    "endocariums"
+  ],
+  "initializer": "he_normal",
+  "activation": "softmax",
+  "kernel_size": 3,
+  "up": "conv",
+  "pool": "max",
+  "learning_rate": 0.0001,
+  "dropout": 0.5,
+  "threshold": 0.25,
+  "loss": {
+    "name": "SparseCategoricalCrossentropy"
+  },
+  "optimizer": {
+    "name": "Adam"
+  },
+  "metrics": [
+    {
+      "name": "Accuracy"
+    },
+    {
+      "name": "SparseCategoricalAccuracy"
+    }
+  ]
+}
