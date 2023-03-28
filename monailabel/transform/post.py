@@ -117,7 +117,7 @@ class Restored(MapTransform):
             result = d[key]
             current_size = result.shape[1:] if self.has_channel else result.shape
             spatial_shape = meta_dict.get("spatial_shape", current_size)
-            spatial_size = spatial_shape[-len(current_size) :]
+            spatial_size = spatial_shape[-len(current_size):]
 
             # Undo Spacing
             if np.any(np.not_equal(current_size, spatial_size)):
@@ -186,7 +186,7 @@ class FindContoursd(MapTransform):
                 continue
 
             labels = [label for label in np.unique(p).tolist() if label > 0]
-            logger.debug(f"Total Unique Masks (excluding background): {labels}")
+            logger.info(f"Total Unique Masks (excluding background): {labels}")
             for label_idx in labels:
                 p = convert_to_numpy(d[key]) if isinstance(d[key], torch.Tensor) else d[key]
                 p = np.where(p == label_idx, 1, 0).astype(np.uint8)
@@ -207,6 +207,174 @@ class FindContoursd(MapTransform):
                         continue
                     if 0 < max_poly_area < area:  # Ignore very large poly (e.g. in case of nuclei)
                         continue
+
+                    contour[:, 0] += location[0]  # X
+                    contour[:, 1] += location[1]  # Y
+
+                    coords = contour.astype(int).tolist()
+                    if foreground_points:
+                        for pt in foreground_points:
+                            if Polygon(coords).contains(pt):
+                                polygons.append(coords)
+                                break
+                    else:
+                        polygons.append(coords)
+
+                if len(polygons):
+                    logger.debug(f"+++++ {label_idx} => Total Polygons Found: {len(polygons)}")
+                    elements.append({"label": label_name, "contours": polygons})
+
+        if elements:
+            if d.get(self.result) is None:
+                d[self.result] = dict()
+            d[self.result][self.result_output_key] = {
+                "location": location,
+                "size": size,
+                "elements": elements,
+                "labels": {n: get_color(n, color_map) for n in label_names},
+            }
+            logger.debug(f"+++++ ALL => Total Annotation Elements Found: {len(elements)}")
+        return d
+
+
+class PostProcess(MapTransform):
+    def __init__(
+        self,
+        keys: KeysCollection,
+    ):
+        super().__init__(keys)
+        self.kernel_size = (51, 51)
+        self.area_treshold = 2500
+        self.dilate = True
+
+    def __call__(self, data):
+        d = dict(data)
+
+        for key in self.keys:
+            p = d[key]
+            p = convert_to_numpy(d[key]) if isinstance(d[key], torch.Tensor) else d[key]
+            final_mask = np.zeros_like(p)
+
+            labels = p.shape[-1]
+            logger.info(f"Total Unique Masks (excluding background): {labels}")
+            for label_idx in range(labels):
+                mask = p[:, :, label_idx].astype(np.uint8)
+                mask = np.moveaxis(mask, 0, 1)  # for cv2
+
+                mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, self.kernel_size)
+
+                horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (75, 5))
+                detected_lines = cv2.morphologyEx(mask, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
+                cnts = cv2.findContours(detected_lines, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                cnts = cnts[0] if len(cnts) == 2 else cnts[1]
+                for c in cnts:
+                    cv2.drawContours(p, [c], -1, (0, 0, 0), 5)
+
+                contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                for cnt in contours:
+                    if len(cnt) < 5:
+                        cv2.fillPoly(
+                            mask,
+                            [cnt],
+                            0
+                        )
+
+                mask = cv2.GaussianBlur(mask, self.kernel_size, 0)
+
+                contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                for cnt in contours:
+                    area = cv2.contourArea(cnt)
+                    if area < self.area_treshold:
+                        cv2.fillPoly(
+                            mask,
+                            [cnt],
+                            0
+                        )
+                mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, self.kernel_size * 5)
+
+                if self.dilate:
+                    mask = cv2.dilate(mask, self.kernel_size * 5, 0)
+
+                final_mask[:, :, label_idx] = np.moveaxis(mask, 0, 1)
+
+            d[key] = final_mask
+
+        return d
+
+
+class FindContoursCustom(MapTransform):
+    def __init__(
+        self,
+        keys: KeysCollection,
+        min_positive=10,
+        min_poly_area=80,
+        max_poly_area=0,
+        result="result",
+        result_output_key="annotation",
+        key_label_colors="label_colors",
+        key_foreground_points=None,
+        labels=None,
+        colormap=None,
+    ):
+        super().__init__(keys)
+
+        self.min_positive = min_positive
+        self.min_poly_area = min_poly_area
+        self.max_poly_area = max_poly_area
+        self.result = result
+        self.result_output_key = result_output_key
+        self.key_label_colors = key_label_colors
+        self.key_foreground_points = key_foreground_points
+        self.colormap = colormap
+
+        labels = labels if labels else dict()
+        labels = [labels] if isinstance(labels, str) else labels
+        if not isinstance(labels, dict):
+            labels = {v: k + 1 for k, v in enumerate(labels)}
+
+        labels = {v: k for k, v in labels.items()}
+        self.labels = labels
+
+    def __call__(self, data):
+        d = dict(data)
+        location = d.get("location", [0, 0])
+        size = d.get("size", [0, 0])
+        min_poly_area = d.get("min_poly_area", self.min_poly_area)
+        max_poly_area = d.get("max_poly_area", self.max_poly_area)
+        color_map = d.get(self.key_label_colors) if self.colormap is None else self.colormap
+
+        foreground_points = d.get(self.key_foreground_points, []) if self.key_foreground_points else []
+        foreground_points = [Point(pt[0], pt[1]) for pt in foreground_points]  # polygons in (x, y) format
+
+        elements = []
+        label_names = set()
+        for key in self.keys:
+            p = d[key]
+            if np.count_nonzero(p) < self.min_positive:
+                continue
+
+            labels = p.shape[-1]
+            logger.info(f"Total Unique Masks (excluding background): {labels}")
+            for label_idx in range(labels):
+                p = convert_to_numpy(d[key]) if isinstance(d[key], torch.Tensor) else d[key]
+                p = p[:, :, label_idx].astype(np.uint8)
+                p = np.moveaxis(p, 0, 1)  # for cv2
+
+                label_name = self.labels.get(label_idx, label_idx)
+                label_names.add(label_name)
+
+                polygons = []
+                contours, _ = cv2.findContours(p, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                for contour in contours:
+                    if len(contour) < 3:
+                        continue
+
+                    contour = np.squeeze(contour)
+                    area = cv2.contourArea(contour)
+                    # if area < min_poly_area:  # Ignore poly with lesser area
+                    #    continue
+                    # if 0 < max_poly_area < area:  # Ignore very large poly (e.g. in case of nuclei)
+                    #    continue
 
                     contour[:, 0] += location[0]  # X
                     contour[:, 1] += location[1]  # Y
