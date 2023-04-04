@@ -122,7 +122,6 @@ class BundleInferTask(BasicInferTask):
         if isinstance(model_paths, str):
             model_paths = os.path.join(path, "models", model_paths)
             if os.path.exists(model_paths):
-                print('I am here already')
                 network = self.bundle_config.get_parsed_content(self.const.key_network_def(), instantiate=True)
             else:
                 model_paths = os.path.join(path, "models", self.const.model_torchscript())
@@ -137,6 +136,7 @@ class BundleInferTask(BasicInferTask):
                 model_path = os.path.join(path, "models", model_path)
                 if os.path.exists(model_path):
                     model_paths[idx] = model_path
+                    print(self.bundle_config)
                     network = self.bundle_config.get_parsed_content(self.const.key_network_def(), instantiate=True)
                 else:
                     logger.warning(
@@ -171,6 +171,7 @@ class BundleInferTask(BasicInferTask):
             preload=strtobool(conf.get("preload", "false")),
             tensorflow=tensorflow,
             model_name=self.bundle_config.get("model_name", None),
+            const=self.const,
             **kwargs,
         )
 

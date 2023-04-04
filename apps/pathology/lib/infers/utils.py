@@ -17,6 +17,8 @@ class BundleConstants:
         key_detector: Sequence[str] = ["detector"],
         key_detector_ops: Sequence[str] = ["detector_ops"],
         key_displayable_configs: Sequence[str] = ["displayable_configs"],
+        models=None,
+        config_paths=None,
     ):
         self._configs = configs
         self._metadata_json = metadata_json
@@ -31,9 +33,17 @@ class BundleConstants:
         self._key_detector = key_detector
         self._key_detector_ops = key_detector_ops
         self._key_displayable_configs = key_displayable_configs
+        self._models = models
+        self._config_paths = config_paths
 
     def configs(self) -> Sequence[str]:
         return self._configs
+
+    def models(self):
+        return self._models
+
+    def config_paths(self):
+        return self._config_paths
 
     def metadata_json(self) -> str:
         return self._metadata_json

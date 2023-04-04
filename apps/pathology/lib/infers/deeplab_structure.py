@@ -11,6 +11,7 @@
 import logging
 from typing import Any, Callable, Dict, Sequence
 from apps.pathology.lib.infers.utils import BundleConstants
+from apps.pathology.model.pathology_structure_segmentation_deeplabv3plus.models.model import DeepLabV3Plus
 
 import numpy as np
 from lib.transforms import LoadImagePatchd, PostFilterLabeld
@@ -31,11 +32,24 @@ class DeepLabV3PlusStructure(BundleInferTask):
     # TODO: replace tensorflow flag by model
 
     def __init__(self, path: str, conf: Dict[str, str], **kwargs):
-        const = BundleConstants(model_pytorch=[
-            "1670105766.4486911_DeepLabV3+_IKEM.index",
-            "1670082792.2425365_DeepLabV3+_IKEM.index",
-            "1670100756.0503645_DeepLabV3+_IKEM.index"
-        ])
+        const = BundleConstants(
+            model_pytorch=[
+                "1670105766.4486911_DeepLabV3+_IKEM.index",
+                "1670082792.2425365_DeepLabV3+_IKEM.index",
+                "1670100756.0503645_DeepLabV3+_IKEM.index"
+            ],
+            models=[
+                DeepLabV3Plus,
+                DeepLabV3Plus,
+                DeepLabV3Plus,
+            ],
+            config_paths=[
+                'apps/pathology/model/pathology_structure_segmentation_deeplabv3plus/configs/config.json',
+                'apps/pathology/model/pathology_structure_segmentation_deeplabv3plus/configs/config2.json',
+                'apps/pathology/model/pathology_structure_segmentation_deeplabv3plus/configs/config3.json',
+            ]
+
+        )
         # const = BundleConstants(model_pytorch="1670105766.4486911_DeepLabV3+_IKEM.index")
         super().__init__(
             path,

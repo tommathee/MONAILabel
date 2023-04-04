@@ -68,7 +68,8 @@ class BasicInferTask(InferTask):
         train_mode=False,
         skip_writer=False,
         tensorflow: bool = False,
-        model_name: str = None
+        model_name: str = None,
+        const=None,
     ):
         """
         :param path: Model File Path. Supports multiple paths to support versions (Last item will be picked as latest)
@@ -102,6 +103,7 @@ class BasicInferTask(InferTask):
         self.skip_writer = skip_writer
         self.tensorflow = tensorflow
         self.model_name = model_name
+        self.const = const
 
         print(f"{self.path}")
 
@@ -469,16 +471,14 @@ class BasicInferTask(InferTask):
                 else:
                     if path or len(self.path) > 0:
                         # TODO: get custom model here
-                        print(f'472 {path}')
-                        configs = TensorflowConfig().get_config(self.model_name)
-                        models = TensorflowConfig().get_model(self.model_name)
+                        configs = self.const.config_paths()  # TensorflowConfig().get_config(self.model_name)
+                        models = self.const.models()  # TensorflowConfig().get_model(self.model_name)
                         network = []
 
                         assert len(models) == len(configs), "Number of models and configs should be same"
                         for idx, config_path in enumerate(configs):
                             logger.info(f"Loading config: {config_path}")
                             config = json.load(open(config_path))
-                            print(config)
                             network.append(models[idx](config).create_model())
                             network[idx].load_weights(self.path[idx].replace('.index', ''))
 
@@ -534,7 +534,7 @@ class BasicInferTask(InferTask):
                 data[self.output_label_key] = outputs
             else:
                 configs = []
-                configs_paths = TensorflowConfig().get_config(self.model_name)
+                configs_paths = self.const.config_paths()  # TensorflowConfig().get_config(self.model_name)
                 for config in configs_paths:
                     configs.append(json.load(open(config)))
 

@@ -20,6 +20,10 @@ class TensorflowConfig():
                     DeepLabV3Plus,
                 ],
             },
+            "nested_unet": {
+                "config": [],
+                "model": [],
+            }
             # TODO: Add your model here
         }
 
