@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import cv2
+import albumentations as A
 
 
 def get_fragment(image, x, y, patch_size, fill_value=255):
@@ -73,6 +74,18 @@ def reorder_channels(mask, config):
     return new_mask
 
 
+def applicate_augmentations(aug, img, mask, batch_size):
+    output_img = []
+    for image_idx in range(len(img)):
+        new_img = np.zeros_like(img[image_idx])
+        for idx_batch in range(batch_size):
+            augmented = aug(image=img[image_idx][idx_batch], mask=mask[idx_batch])
+            new_img[idx_batch] = augmented['image']
+            #mask[image_idx][idx_batch] = augmented['mask']
+        output_img.append(new_img)
+    return output_img, mask
+
+
 def sliding_window(image, stepSize, windowSize):
     # slide a window across the image
     for y in range(0, image.shape[0], stepSize):
@@ -135,9 +148,74 @@ def deeplab_infere(networks, data, configs):
     return np.array(canvas > configs[0]['threshold'], dtype='uint8')
 
 
-def custom_infere(network, data, config):
+def infere(network, data, config):
+    patch_size = config['image_size']
+    horizontal_flip = A.HorizontalFlip(p=1)
+    vertical_flip = A.VerticalFlip(p=1)
+
+    hor_ver_flip = A.Compose([
+        A.HorizontalFlip(p=1),
+        A.VerticalFlip(p=1)
+    ])
+
+    canvas = np.zeros_like(data, dtype='float16')
+    divim = np.zeros_like(data, dtype='uint8')
+
+    mask = np.zeros((1, patch_size, patch_size, len(config['classes'])))
+
+    for (x, y, window) in sliding_window(data, stepSize=patch_size // 2, windowSize=(patch_size, patch_size)):
+        if window.shape[0] != patch_size or window.shape[1] != patch_size:
+            window = get_fragment(window, x, y, patch_size, fill_value=1)
+
+        window2 = tf.image.resize(window, [patch_size // 2, patch_size // 2], method='bilinear')
+        # Pre ucely nahradenia segmentacie jadierok
+        window = np.concatenate(
+            (window, np.zeros((window.shape[0], window.shape[1], 1))),
+            axis=-1
+        )
+        window = np.expand_dims(window, axis=0)
+        window2 = np.expand_dims(window2, axis=0)
+        #window = tf.convert_to_tensor(window, dtype=tf.float32)
+        img = [window, window2]
+
+        pred_mask = network.predict(img)
+
+        img1, _ = applicate_augmentations(horizontal_flip, img, mask, 1)
+        pred_mask1 = network.predict(img1)
+
+        img2, _ = applicate_augmentations(vertical_flip, img, mask, 1)
+        pred_mask2 = network.predict(img2)
+
+        img3, _ = applicate_augmentations(hor_ver_flip, img, mask, 1)
+        pred_mask3 = network.predict(img3)
+
+        pred_mask1, _ = applicate_augmentations(horizontal_flip, pred_mask1, mask, 1)
+        pred_mask2, _ = applicate_augmentations(vertical_flip, pred_mask2, mask, 1)
+        pred_mask3, _ = applicate_augmentations(hor_ver_flip, pred_mask3, mask, 1)
+
+        final_mask = np.sum([pred_mask, pred_mask1, pred_mask2, pred_mask3], axis=0) / 4
+
+        for idx in range(pred_mask.shape[0]):
+            final_mask_idx = final_mask[idx]
+            canvas[y:y + patch_size, x:x + patch_size] += final_mask_idx[
+                : patch_size + (canvas.shape[0] - y - final_mask_idx.shape[0]),
+                : patch_size + (canvas.shape[1] - x - final_mask_idx.shape[1]),
+                :
+            ]
+            divim[y:y + patch_size, x:x + patch_size] += 1
+
+    divim[divim == 0] = 1
+    canvas /= divim
+
+    return np.array(canvas > config['threshold'], dtype='uint8')
+
+
+def custom_infere(network, data, configs):
+    print("custom_infere")
     if len(network) > 1:
-        return deeplab_infere(network, data, config)
+        return deeplab_infere(network, data, configs)
+    else:
+        return infere(network[0], data, configs[0])
 
 
 # def custom_infere(network, data, config):

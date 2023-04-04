@@ -3,7 +3,7 @@
     "$import glob",
     "$import os"
   ],
-  "model_name": "deeplabv3plus",
+  "model_name": "nestedunet",
   "bundle_root": "$os.getcwd()",
   "output_dir": "$os.path.join(@bundle_root, 'eval')",
   "dataset_dir": "/workspace/Data/Pathology/CoNSeP/Test/Images",

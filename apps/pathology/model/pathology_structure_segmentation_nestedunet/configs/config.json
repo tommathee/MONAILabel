@@ -1,0 +1,24 @@
+{
+  "model": "U-Net++",
+  "lab": 0,
+  "overlay": 1,
+  "image_size": 256,
+  "channels": 4,
+  "input_images": 2,
+  "output_masks": 1,
+  "batch_size": 16,
+  "padding": "same",
+  "filters": 32,
+  "classes": [
+    "blood_vessels",
+    "inflammations",
+    "endocariums"
+  ],
+  "initializer": "he_normal",
+  "activation": "sigmoid",
+  "kernel_size": 3,
+  "up": "conv",
+  "pool": "max",
+  "dropout": 0.5,
+  "threshold": 0.2
+}
