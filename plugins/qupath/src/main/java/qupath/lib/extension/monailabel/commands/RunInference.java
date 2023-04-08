@@ -188,6 +188,7 @@ public class RunInference implements Runnable {
 			ROI roi = ROIs.createRectangleROI(bbox[0], bbox[1], bbox[2], bbox[3], null);
 
 			String image = Utils.getNameWithoutExtension(imageFile);
+      req.image_name = image;
 			String sessionId = null;
 			int offsetX = 0;
 			int offsetY = 0;
@@ -200,8 +201,8 @@ public class RunInference implements Runnable {
 				offsetX = req.location[0];
 				offsetY = req.location[1];
 
-				req.location[0] = req.location[1] = 0;
-				req.size[0] = req.size[1] = 0;
+				//req.location[0] = req.location[1] = 0;
+				//req.size[0] = req.size[1] = 0;
 
 				String im = imageFile.toLowerCase();
 				if ((im.endsWith(".png") || im.endsWith(".jpg") || im.endsWith(".jpeg"))

@@ -149,6 +149,7 @@ public class MonaiLabelClient {
 		public int[] size = { 0, 0 };
 		public int[] tile_size = { 1024, 1024 };
 		public int min_poly_area = 30;
+    public String image_name = "";
 		public InferParams params = new InferParams();
 	};
 
