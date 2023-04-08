@@ -27,7 +27,7 @@ up: 'conv'
 pool: 'max'
 learning_rate: 0.0001
 dropout: 0.5
-threshold: 0.25
+threshold: 0.5
 loss:
   name: 'SparseCategoricalCrossentropy'
 optimizer:

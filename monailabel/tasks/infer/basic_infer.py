@@ -17,7 +17,6 @@ import json
 from abc import abstractmethod
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
-from apps.pathology.model.config import TensorflowConfig
 from monailabel.tasks.infer.custom_infere import custom_infere
 import numpy as np
 
@@ -104,9 +103,6 @@ class BasicInferTask(InferTask):
         self.tensorflow = tensorflow
         self.model_name = model_name
         self.const = const
-
-        print(f"{self.path}")
-
         self._networks: Dict = {}
 
         self._config.update(
@@ -210,7 +206,7 @@ class BasicInferTask(InferTask):
         return None
 
     @abstractmethod
-    def post_transforms(self, data=None) -> Sequence[Callable]:
+    def post_transforms(self, data=None, xml_path=None) -> Sequence[Callable]:
         """
         Provide List of post-transforms
 
@@ -280,12 +276,10 @@ class BasicInferTask(InferTask):
         req.update(request)
 
         model_filename = req.get("model_filename", "model.pt")
-        print(f'281 MODEL{model_filename}')
         model_filename = model_filename if isinstance(model_filename, str) else model_filename[0]
         self.path.append(os.path.join(os.path.dirname(self.path[0]), model_filename)) if self.path and isinstance(
             self.path, list
         ) else self.path
-        print(f'284 PATH{self.path}')
 
         # device
         device = req.get("device", "cuda")
@@ -311,6 +305,7 @@ class BasicInferTask(InferTask):
         callback_run_invert_transforms = callbacks.get(CallBackTypes.INVERT_TRANSFORMS)
         callback_run_post_transforms = callbacks.get(CallBackTypes.POST_TRANSFORMS)
         callback_writer = callbacks.get(CallBackTypes.WRITER)
+        xml_path = f'{data["image_name"]}-patch-{data["location"][0]}_{data["location"][1]}_{data["size"][0]}_{data["size"][1]}.xml'
 
         start = time.time()
         pre_transforms = self.pre_transforms(data)
@@ -336,7 +331,7 @@ class BasicInferTask(InferTask):
         latency_invert = time.time() - start
 
         start = time.time()
-        data = self.run_post_transforms(data, self.post_transforms(data))
+        data = self.run_post_transforms(data, self.post_transforms(data, xml_path))
         if callback_run_post_transforms:
             data = callback_run_post_transforms(data)
         latency_post = time.time() - start
@@ -457,7 +452,6 @@ class BasicInferTask(InferTask):
                 logger.warning(f"Reload model from cache.  Prev ts: {cached[1]}; Current ts: {statbuf.st_mtime}")
 
         # TODO: handle tensorflow model better than this hack
-        print(f'458 {self.tensorflow}')
         if network is None:
             if self.network:
                 if not self.tensorflow:
@@ -471,17 +465,10 @@ class BasicInferTask(InferTask):
                 else:
                     if path or len(self.path) > 0:
                         # TODO: get custom model here
-                        configs = self.const.config_paths()  # TensorflowConfig().get_config(self.model_name)
-                        models = self.const.models()  # TensorflowConfig().get_model(self.model_name)
-                        network = []
+                        configs = self.const.config_paths()
+                        network = self.const.models()
 
-                        assert len(models) == len(configs), "Number of models and configs should be same"
-                        for idx, config_path in enumerate(configs):
-                            logger.info(f"Loading config: {config_path}")
-                            config = json.load(open(config_path))
-                            network.append(models[idx](config).create_model())
-                            network[idx].load_weights(self.path[idx].replace('.index', ''))
-
+                        assert len(network) == len(configs), "Number of models and configs should be same"
             else:
                 network = torch.jit.load(path, map_location=torch.device(device))
 
@@ -513,7 +500,6 @@ class BasicInferTask(InferTask):
         if network:
             if not self.tensorflow:
                 inputs = data[self.input_key]
-                print(inputs.shape)
                 inputs = inputs if torch.is_tensor(inputs) else torch.from_numpy(inputs)
                 inputs = inputs[None] if convert_to_batch else inputs
                 inputs = inputs.to(torch.device(device))
@@ -534,25 +520,15 @@ class BasicInferTask(InferTask):
                 data[self.output_label_key] = outputs
             else:
                 configs = []
-                configs_paths = self.const.config_paths()  # TensorflowConfig().get_config(self.model_name)
+                configs_paths = self.const.config_paths()
                 for config in configs_paths:
                     configs.append(json.load(open(config)))
 
                 inputs = data[self.input_key]
                 inputs = inputs.cpu().numpy()
                 inputs = inputs if isinstance(inputs, tf.Tensor) else tf.convert_to_tensor(inputs)
-                #inputs = tf.expand_dims(inputs, 0) if convert_to_batch else inputs
 
-                # print(f'inputs: {inputs.shape}')
-                # np.save('inputs.npy', inputs[0])
-                # print(self.output_label_key)
-                data[self.output_label_key] = custom_infere(network, inputs, configs)
-                # TODO: add custom inference
-                #outputs = inferer(inputs, network)
-                # if convert_to_batch:
-                #    outputs = outputs[0]
-
-                #data[self.output_label_key] = outputs.numpy()
+                data[self.output_label_key] = custom_infere(inputs, configs, self.path)
         else:
             # consider them as callable transforms
             data = run_transforms(data, inferer, log_prefix="INF", log_name="Inferer")

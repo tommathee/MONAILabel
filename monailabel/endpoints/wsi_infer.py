@@ -43,6 +43,7 @@ class WSIInput(BaseModel):
     tile_size: Optional[Sequence[int]] = Field([1024, 1024], title="Tile size")
     min_poly_area: Optional[int] = Field(80, title="Min Area to filter mask polygons")
     params: Optional[dict] = Field({}, title="Additional Params")
+    image_name: Optional[str] = Field("", title="Image Name")
 
 
 class ResultType(str, Enum):

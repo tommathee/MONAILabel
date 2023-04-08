@@ -22,8 +22,10 @@ from monai.transforms import MapTransform, Resize, Transform, generate_spatial_b
 from monai.utils import InterpolateMode, convert_to_numpy, ensure_tuple_rep
 from shapely.geometry import Point, Polygon
 from torchvision.utils import make_grid, save_image
+import geopandas as gpd
 
 from monailabel.utils.others.label_colors import get_color
+from monailabel.transform.utils import create_geojson, xml2geojson, get_cells, get_mask, postprocess_endocard, postprocess_inflammation, postprocess_vessels
 
 logger = logging.getLogger(__name__)
 
@@ -296,6 +298,55 @@ class PostProcess(MapTransform):
                     mask = cv2.dilate(mask, self.kernel_size * 5, 0)
 
                 final_mask[:, :, label_idx] = np.moveaxis(mask, 0, 1)
+
+            d[key] = final_mask
+
+        return d
+
+
+class PostProcessAnnotations(MapTransform):
+    def __init__(
+        self,
+        keys: KeysCollection,
+        xml_path: str,
+    ):
+        super().__init__(keys)
+        self.kernel_size = (51, 51)
+        self.area_treshold = 2500
+        self.dilate = True
+        self.xml_path = xml_path
+
+    def __call__(self, data):
+        d = dict(data)
+
+        for key in self.keys:
+            p = d[key]
+            p = convert_to_numpy(d[key]) if isinstance(d[key], torch.Tensor) else d[key]
+            final_mask = p
+
+            geojson_file = create_geojson(final_mask, [
+                "blood_vessels",
+                "inflammations",
+                "endocardiums"
+            ])
+            gdf = gpd.GeoDataFrame.from_features(geojson_file)
+            try:
+                gj = xml2geojson(f'./datasets/labels/final/{self.xml_path}')
+                gdf_tissue, gdf_immune = get_cells(gj)
+
+                if gdf_immune.shape[0] != 0:
+                    gdf = postprocess_inflammation(gdf, gdf_immune)
+                if gdf_tissue.shape[0] != 0:
+                    gdf = postprocess_endocard(gdf, gdf_tissue)
+                    gdf = postprocess_vessels(gdf, gdf_tissue)
+            except:
+                print("No XML file found")
+
+            final_mask = get_mask(
+                final_mask.shape,
+                gdf.to_dict(orient='records'),
+                ["Blood vessels", "Inflammation", "Endocardium"]
+            )
 
             d[key] = final_mask
 

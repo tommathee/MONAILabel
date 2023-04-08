@@ -19,7 +19,7 @@ from monai.transforms import FromMetaTensord, LoadImaged, SaveImaged, SqueezeDim
 
 from monailabel.interfaces.tasks.infer_v2 import InferType
 from monailabel.tasks.infer.bundle import BundleInferTask
-from monailabel.transform.post import FindContoursCustom, PostProcess
+from monailabel.transform.post import FindContoursCustom, PostProcess, PostProcessAnnotations
 from monailabel.transform.writer import PolygonWriter
 
 logger = logging.getLogger(__name__)
@@ -79,13 +79,13 @@ class NestedUnetStructure(BundleInferTask):
         return t
 
     # TODO: pozrieť sa na toto
-    def post_transforms(self, data=None) -> Sequence[Callable]:
-        print('post_transforms')
+    def post_transforms(self, data=None, xml_path=None) -> Sequence[Callable]:
         t = [x for x in super().post_transforms(data)]
         t.extend(
             [
                 PostFilterLabeld(keys="pred"),
                 PostProcess(keys="pred"),
+                PostProcessAnnotations(keys="pred", xml_path=xml_path),
                 FindContoursCustom(keys="pred", labels=self.labels,
                                    max_poly_area=128 * 128),
             ]

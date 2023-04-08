@@ -90,7 +90,6 @@ class BundleInferTask(BasicInferTask):
         tensorflow: bool = False,
         **kwargs,
     ):
-        print('I am here bundle.py')
         self.valid: bool = False
         self.const = const if const else BundleConstants()
 
@@ -109,7 +108,6 @@ class BundleInferTask(BasicInferTask):
         unload_module("scripts")
 
         self.bundle_config = ConfigParser()
-        print('Reading', os.path.join(path, "configs", config_paths[0]))
         self.bundle_config.read_config(os.path.join(path, "configs", config_paths[0]))
         self.bundle_config.config.update({self.const.key_bundle_root(): path})  # type: ignore
         if self.dropout > 0:
@@ -118,7 +116,6 @@ class BundleInferTask(BasicInferTask):
         network = None
 
         model_paths = self.const.model_pytorch()
-        print('121 model_paths', model_paths)
         if isinstance(model_paths, str):
             model_paths = os.path.join(path, "models", model_paths)
             if os.path.exists(model_paths):
@@ -136,7 +133,6 @@ class BundleInferTask(BasicInferTask):
                 model_path = os.path.join(path, "models", model_path)
                 if os.path.exists(model_path):
                     model_paths[idx] = model_path
-                    print(self.bundle_config)
                     network = self.bundle_config.get_parsed_content(self.const.key_network_def(), instantiate=True)
                 else:
                     logger.warning(
@@ -179,12 +175,10 @@ class BundleInferTask(BasicInferTask):
         if not tensorflow:
             pytorch_models = [os.path.basename(p) for p in glob.glob(os.path.join(path, "models", "*.pt"))]
             pytorch_models.sort(key=len)
-            print('Models', pytorch_models)
             self._config.update({"model_filename": pytorch_models})
         else:
             tensorflow_models = [os.path.basename(p) for p in glob.glob(os.path.join(path, "models", "*.index"))]
             tensorflow_models.sort(key=len)
-            print('Models', tensorflow_models)
             self._config.update({"model_filename": tensorflow_models})
 
         # Add bundle's loadable params to MONAI Label config, load exposed keys and params to options panel
