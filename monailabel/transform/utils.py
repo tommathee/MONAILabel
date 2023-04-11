@@ -164,6 +164,25 @@ def postprocess_vessels(gdf, gdf_tissue):
     return gdf
 
 
+def get_cell_mask(gj, shape):
+    x, y = int(shape[0]), int(shape[1])
+
+    mask = np.zeros((x, y), dtype='uint8')
+
+    for feat in gj['features']:
+        if feat['properties'].get('classification', None) is None or feat['properties']['classification']['name'] != 'Region*':
+            geometry_name = 'nucleusGeometry' if feat.get(
+                'nucleusGeometry') else 'geometry'
+            coors = feat[geometry_name]['coordinates'][0]
+            pts = [[round(c[0]), round(c[1])] for c in coors]
+            cv.fillPoly(
+                mask,
+                [np.array(pts)],
+                1
+            )
+    return mask
+
+
 def get_cells(gj):
     immune_cells = []
     tissues = []

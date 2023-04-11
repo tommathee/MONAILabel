@@ -6,7 +6,7 @@ class InfereConfig:
     def __init__(self):
         self.models = {
             "deeplabv3+": DeepLabV3Plus,
-            "nestedunet": NestedUnet
+            "u-net++": NestedUnet
         }
 
     def get_model(self, model_name):

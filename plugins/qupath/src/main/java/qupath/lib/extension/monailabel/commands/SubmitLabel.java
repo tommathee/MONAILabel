@@ -52,220 +52,220 @@ import qupath.lib.roi.ROIs;
 import qupath.lib.roi.interfaces.ROI;
 
 public class SubmitLabel implements Runnable {
-	private final static Logger logger = LoggerFactory.getLogger(SubmitLabel.class);
+  private final static Logger logger = LoggerFactory.getLogger(SubmitLabel.class);
 
-	private QuPathGUI qupath;
+  private QuPathGUI qupath;
 
-	public SubmitLabel(QuPathGUI qupath) {
-		this.qupath = qupath;
-	}
+  public SubmitLabel(QuPathGUI qupath) {
+    this.qupath = qupath;
+  }
 
-	@Override
-	public void run() {
-		Path annotationXML = null;
-		Path imagePatch = null;
-		try {
-			var viewer = qupath.getViewer();
-			var imageData = viewer.getImageData();
-			String imageFile = Utils.getFileName(imageData.getServerPath());
-			String image = Utils.getNameWithoutExtension(imageFile);
+  @Override
+  public void run() {
+    Path annotationXML = null;
+    Path imagePatch = null;
+    try {
+      var viewer = qupath.getViewer();
+      var imageData = viewer.getImageData();
+      String imageFile = Utils.getFileName(imageData.getServerPath());
+      String image = Utils.getNameWithoutExtension(imageFile);
 
-			String im = imageFile.toLowerCase();
-			boolean isWSI = (im.endsWith(".png") || im.endsWith(".jpg") || im.endsWith(".jpeg")) ? false : true;
-			logger.info("MONAILabel:: isWSI: " + isWSI + "; File: " + imageFile);
+      String im = imageFile.toLowerCase();
+      boolean isWSI = (im.endsWith(".png") || im.endsWith(".jpg") || im.endsWith(".jpeg")) ? false : true;
+      logger.info("MONAILabel:: isWSI: " + isWSI + "; File: " + imageFile);
 
-			boolean validImage = MonaiLabelClient.imageExists(image);
-			logger.info("Image exist on Server: " + validImage);
+      boolean validImage = MonaiLabelClient.imageExists(image);
+      logger.info("Image exist on Server: " + validImage);
 
-			if (validImage) {
-				var choice = isWSI ? Dialogs.showYesNoCancelDialog("MONAILabel",
-						"This will submit annotation to MONAI Label Server and override existing annotations for: '"
-								+ image + "'\n"
-								+ "\nDo you want to save Annotation for selected ROI instead of WSI Image?"
-								+ "  Click 'No' to save for WSI instead of ROI.")
-						: Dialogs.showYesNoDialog("MONAILabel",
-								"This will submit annotation to MONAI Label Server and override existing annotations for: '"
-										+ image + "'\n");
+      if (validImage) {
+        var choice = isWSI ? Dialogs.showYesNoCancelDialog("MONAILabel",
+            "This will submit annotation to MONAI Label Server and override existing annotations for: '"
+                + image + "'\n"
+                + "\nDo you want to save Annotation for selected ROI instead of WSI Image?"
+                + "  Click 'No' to save for WSI instead of ROI.")
+            : Dialogs.showYesNoDialog("MONAILabel",
+                "This will submit annotation to MONAI Label Server and override existing annotations for: '"
+                    + image + "'\n");
 
-				if ((isWSI && choice == DialogButton.NO) || (!isWSI && choice == Boolean.TRUE)) {
-					annotationXML = getAnnotationsXml(image, imageData, new int[4]);
-					logger.info("Annotations XML: " + annotationXML);
+        if ((isWSI && choice == DialogButton.NO) || (!isWSI && choice == Boolean.TRUE)) {
+          annotationXML = getAnnotationsXml(image, imageData, new int[4]);
+          logger.info("Annotations XML: " + annotationXML);
 
-					MonaiLabelClient.saveLabel(image, annotationXML.toFile(), null, "{}");
-					Dialogs.showInfoNotification("MONALabel", "Label/Annotations saved in Server");
-					return;
-				} else if (!isWSI || choice == DialogButton.CANCEL) {
-					return;
-				}
-			}
+          MonaiLabelClient.saveLabel(image, annotationXML.toFile(), null, "{}");
+          Dialogs.showInfoNotification("MONALabel", "Label/Annotations saved in Server");
+          return;
+        } else if (!isWSI || choice == DialogButton.CANCEL) {
+          return;
+        }
+      }
 
-			var selected = imageData.getHierarchy().getSelectionModel().getSelectedObject();
-			var roi = selected != null ? selected.getROI() : null;
-			int[] bbox = Utils.getBBOX(roi);
-			if (isWSI && bbox[2] <= 0 && bbox[3] <= 0) {
-				Dialogs.showWarningNotification("MONAILabel",
-						"Please select the Annotation ROI/Rectangle for submission");
-				return;
-			}
+      var selected = imageData.getHierarchy().getSelectionModel().getSelectedObject();
+      var roi = selected != null ? selected.getROI() : null;
+      int[] bbox = Utils.getBBOX(roi);
+      if (isWSI && bbox[2] <= 0 && bbox[3] <= 0) {
+        Dialogs.showWarningNotification("MONAILabel",
+            "Please select the Annotation ROI/Rectangle for submission");
+        return;
+      }
 
-			String patchName = isWSI ? image + String.format("-patch-%d_%d_%d_%d", bbox[0], bbox[1], bbox[2], bbox[3])
-					: image;
-			ParameterList list = new ParameterList();
-			if (isWSI) {
-				list.addStringParameter("Location", "Patch (x,y,w,h)", Arrays.toString(bbox));
-				list.addStringParameter("Patch", "Patch Name", patchName);
-			} else {
-				list.addStringParameter("Patch", "Image/Patch Name", patchName);
-			}
+      String patchName = isWSI ? image + String.format("-patch-%d_%d_%d_%d", bbox[0], bbox[1], bbox[2], bbox[3])
+          : image;
+      ParameterList list = new ParameterList();
+      if (isWSI) {
+        list.addStringParameter("Location", "Patch (x,y,w,h)", Arrays.toString(bbox));
+        list.addStringParameter("Patch", "Patch Name", patchName);
+      } else {
+        list.addStringParameter("Patch", "Image/Patch Name", patchName);
+      }
 
-			if (Dialogs.showParameterDialog("MONAILabel - Save Patch + Label", list)) {
-				bbox = isWSI ? Utils.parseStringArray(list.getStringParameterValue("Location")) : new int[4];
-				patchName = list.getStringParameterValue("Patch");
-				if (validImage || Dialogs.showYesNoDialog("MONAILabel",
-						"This will upload BOTH image patch + annotation to MONAI Label Server.\n\n"
-								+ "Do you want to continue?")) {
+      if (Dialogs.showParameterDialog("MONAILabel - Save Patch + Label", list)) {
+        bbox = isWSI ? Utils.parseStringArray(list.getStringParameterValue("Location")) : new int[4];
+        patchName = list.getStringParameterValue("Patch");
+        if (validImage || Dialogs.showYesNoDialog("MONAILabel",
+            "This will upload BOTH image patch + annotation to MONAI Label Server.\n\n"
+                + "Do you want to continue?")) {
 
-					annotationXML = getAnnotationsXml(image, imageData, bbox);
-					logger.info("MONAILabel:: Annotations XML: " + annotationXML);
+          annotationXML = getAnnotationsXml(image, imageData, bbox);
+          logger.info("MONAILabel:: Annotations XML: " + annotationXML);
 
-					if (isWSI) {
-						imagePatch = java.nio.file.Files.createTempFile("patch", ".png");
-						var requestROI = RegionRequest.createInstance(imageData.getServer().getPath(), 1, roi);
-						ImageWriterTools.writeImageRegion(imageData.getServer(), requestROI, imagePatch.toString());
-					} else {
-						imagePatch = new File(imageFile).toPath();
-					}
+          if (isWSI) {
+            imagePatch = java.nio.file.Files.createTempFile("patch", ".png");
+            var requestROI = RegionRequest.createInstance(imageData.getServer().getPath(), 1, roi);
+            ImageWriterTools.writeImageRegion(imageData.getServer(), requestROI, imagePatch.toString());
+          } else {
+            imagePatch = new File(imageFile).toPath();
+          }
 
-					ImageInfo imageInfo = MonaiLabelClient.saveImage(patchName, imagePatch.toFile(), "{}");
-					logger.info("MONAILabel:: New Image ID => " + imageInfo.image);
-					Dialogs.showInfoNotification("MONALabel", "Image Patch uploaded to MONAILabel Server");
-					if (!isWSI) {
-						imagePatch = null;
-					}
+          ImageInfo imageInfo = MonaiLabelClient.saveImage(patchName, imagePatch.toFile(), "{}");
+          logger.info("MONAILabel:: New Image ID => " + imageInfo.image);
+          Dialogs.showInfoNotification("MONALabel", "Image Patch uploaded to MONAILabel Server");
+          if (!isWSI) {
+            imagePatch = null;
+          }
 
-					MonaiLabelClient.saveLabel(imageInfo.image, annotationXML.toFile(), null, "{}");
-					Dialogs.showInfoNotification("MONALabel", "Label/Annotations saved in Server");
-				}
-			}
-		} catch (Exception ex) {
-			ex.printStackTrace();
-			Dialogs.showErrorMessage("MONAILabel - Pathology", ex);
-		} finally {
-			Utils.deleteFile(annotationXML);
-			Utils.deleteFile(imagePatch);
-		}
-	}
+          MonaiLabelClient.saveLabel(imageInfo.image, annotationXML.toFile(), null, "{}");
+          Dialogs.showInfoNotification("MONALabel", "Label/Annotations saved in Server");
+        }
+      }
+    } catch (Exception ex) {
+      ex.printStackTrace();
+      Dialogs.showErrorMessage("MONAILabel - Pathology", ex);
+    } finally {
+      Utils.deleteFile(annotationXML);
+      Utils.deleteFile(imagePatch);
+    }
+  }
 
-	private Path getAnnotationsXml(String image, ImageData<BufferedImage> imageData, int[] bbox)
-			throws IOException, ParserConfigurationException, TransformerException {
-		DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
-		DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
+  private Path getAnnotationsXml(String image, ImageData<BufferedImage> imageData, int[] bbox)
+      throws IOException, ParserConfigurationException, TransformerException {
+    DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
+    DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
 
-		// root elements
-		Document doc = docBuilder.newDocument();
-		Element rootElement = doc.createElement("ASAP_Annotations");
-		doc.appendChild(rootElement);
+    // root elements
+    Document doc = docBuilder.newDocument();
+    Element rootElement = doc.createElement("ASAP_Annotations");
+    doc.appendChild(rootElement);
 
-		Element annotations = doc.createElement("Annotations");
-		annotations.setAttribute("Name", "");
-		annotations.setAttribute("Description", "");
-		annotations.setAttribute("X", String.valueOf(bbox[0]));
-		annotations.setAttribute("Y", String.valueOf(bbox[1]));
-		annotations.setAttribute("W", String.valueOf(bbox[2]));
-		annotations.setAttribute("H", String.valueOf(bbox[3]));
-		rootElement.appendChild(annotations);
+    Element annotations = doc.createElement("Annotations");
+    annotations.setAttribute("Name", "");
+    annotations.setAttribute("Description", "");
+    annotations.setAttribute("X", String.valueOf(bbox[0]));
+    annotations.setAttribute("Y", String.valueOf(bbox[1]));
+    annotations.setAttribute("W", String.valueOf(bbox[2]));
+    annotations.setAttribute("H", String.valueOf(bbox[3]));
+    rootElement.appendChild(annotations);
 
-		ROI patchROI = (bbox[2] > 0 && bbox[3] > 0) ? ROIs.createRectangleROI(bbox[0], bbox[1], bbox[2], bbox[3], null)
-				: null;
+    ROI patchROI = (bbox[2] > 0 && bbox[3] > 0) ? ROIs.createRectangleROI(bbox[0], bbox[1], bbox[2], bbox[3], null)
+        : null;
 
-		int count = 0;
-		var groups = new HashMap<String, String>();
-		List<PathObject> objs = imageData.getHierarchy().getFlattenedObjectList(null);
-		for (int i = 0; i < objs.size(); i++) {
-			var a = objs.get(i);
+    int count = 0;
+    var groups = new HashMap<String, String>();
+    List<PathObject> objs = imageData.getHierarchy().getFlattenedObjectList(null);
+    for (int i = 0; i < objs.size(); i++) {
+      var a = objs.get(i);
 
-			// Ignore which doesn't have class
-			String name = a.getPathClass() != null ? a.getPathClass().getName() : null;
-			if (name == null || name.isEmpty()) {
-				continue;
-			}
+      // Ignore which doesn't have class
+      String name = a.getPathClass() != null ? a.getPathClass().getName() : null;
+      if (name == null || name.isEmpty()) {
+        continue;
+      }
 
-			// Ignore Points
-			var roi = a.getROI();
-			if (roi == null || roi.isPoint()) {
-				continue;
-			}
+      // Ignore Points
+      var roi = a.getROI();
+      if (roi == null || roi.isPoint()) {
+        continue;
+      }
 
-			// Ignore other objects not part of BBOX
-			if (patchROI != null && !patchROI.contains(roi.getCentroidX(), roi.getCentroidY())) {
-				continue;
-			}
+      // Ignore other objects not part of BBOX
+      if (patchROI != null && !patchROI.contains(roi.getCentroidX(), roi.getCentroidY())) {
+        continue;
+      }
 
-			var points = roi.getAllPoints();
-			var color = String.format("#%06x", 0xFFFFFF & a.getPathClass().getColor());
-			groups.put(name, color);
+      var points = roi.getAllPoints();
+      var color = String.format("#%06x", 0xFFFFFF & a.getPathClass().getColor());
+      groups.put(name, color);
 
-			Element annotation = doc.createElement("Annotation");
-			annotation.setAttribute("Name", name);
-			annotation.setAttribute("Type", roi.getRoiName());
-			annotation.setAttribute("PartOfGroup", name);
-			annotation.setAttribute("Color", color);
-			annotations.appendChild(annotation);
+      Element annotation = doc.createElement("Annotation");
+      annotation.setAttribute("Name", name);
+      annotation.setAttribute("Type", roi.getRoiName());
+      annotation.setAttribute("PartOfGroup", name);
+      annotation.setAttribute("Color", color);
+      annotations.appendChild(annotation);
 
-			Element coordinates = doc.createElement("Coordinates");
-			annotation.appendChild(coordinates);
+      Element coordinates = doc.createElement("Coordinates");
+      annotation.appendChild(coordinates);
 
-			for (int j = 0; j < points.size(); j++) {
-				var p = points.get(j);
-				Element coordinate = doc.createElement("Coordinate");
-				coordinate.setAttribute("Order", String.valueOf(j));
-				coordinate.setAttribute("X", String.valueOf((int) p.getX() - bbox[0]));
-				coordinate.setAttribute("Y", String.valueOf((int) p.getY() - bbox[1]));
-				coordinates.appendChild(coordinate);
-			}
-			count++;
-		}
+      for (int j = 0; j < points.size(); j++) {
+        var p = points.get(j);
+        Element coordinate = doc.createElement("Coordinate");
+        coordinate.setAttribute("Order", String.valueOf(j));
+        coordinate.setAttribute("X", String.valueOf((int) p.getX() - bbox[0]));
+        coordinate.setAttribute("Y", String.valueOf((int) p.getY() - bbox[1]));
+        coordinates.appendChild(coordinate);
+      }
+      count++;
+    }
 
-		Element annotationGroups = doc.createElement("AnnotationGroups");
-		rootElement.appendChild(annotationGroups);
+    Element annotationGroups = doc.createElement("AnnotationGroups");
+    rootElement.appendChild(annotationGroups);
 
-		for (String group : groups.keySet()) {
-			Element annotationGroup = doc.createElement("Group");
-			annotationGroup.setAttribute("Name", group);
-			annotationGroup.setAttribute("PartOfGroup", "None");
-			annotationGroup.setAttribute("Color", groups.get(group));
-			annotationGroups.appendChild(annotationGroup);
-		}
+    for (String group : groups.keySet()) {
+      Element annotationGroup = doc.createElement("Group");
+      annotationGroup.setAttribute("Name", group);
+      annotationGroup.setAttribute("PartOfGroup", "None");
+      annotationGroup.setAttribute("Color", groups.get(group));
+      annotationGroups.appendChild(annotationGroup);
+    }
 
-		logger.info("Total Objects saved: " + count);
-		if (count == 0) {
-			throw new IOException("ZERO annotations found (nothing to save/submit)");
-		}
-		return writeXml(image, doc);
-	}
+    logger.info("Total Objects saved: " + count);
+    if (count == 0) {
+      throw new IOException("ZERO annotations found (nothing to save/submit)");
+    }
+    return writeXml(image, doc);
+  }
 
-	// write doc to output stream
-	private Path writeXml(String image, Document doc) throws TransformerException, IOException {
-		FileOutputStream output = null;
-		try {
-			var path = java.nio.file.Files.createTempFile(image, ".xml");
-			output = new FileOutputStream(path.toFile());
+  // write doc to output stream
+  private Path writeXml(String image, Document doc) throws TransformerException, IOException {
+    FileOutputStream output = null;
+    try {
+      var path = java.nio.file.Files.createTempFile(image, ".xml");
+      output = new FileOutputStream(path.toFile());
 
-			TransformerFactory transformerFactory = TransformerFactory.newInstance();
-			Transformer transformer = transformerFactory.newTransformer();
+      TransformerFactory transformerFactory = TransformerFactory.newInstance();
+      Transformer transformer = transformerFactory.newTransformer();
 
-			// pretty print
-			transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+      // pretty print
+      transformer.setOutputProperty(OutputKeys.INDENT, "yes");
 
-			DOMSource source = new DOMSource(doc);
-			StreamResult result = new StreamResult(output);
-			transformer.transform(source, result);
-			output.close();
-			return path;
-		} finally {
-			if (output != null) {
-				output.close();
-			}
-		}
-	}
+      DOMSource source = new DOMSource(doc);
+      StreamResult result = new StreamResult(output);
+      transformer.transform(source, result);
+      output.close();
+      return path;
+    } finally {
+      if (output != null) {
+        output.close();
+      }
+    }
+  }
 }

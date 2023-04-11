@@ -305,7 +305,7 @@ class BasicInferTask(InferTask):
         callback_run_invert_transforms = callbacks.get(CallBackTypes.INVERT_TRANSFORMS)
         callback_run_post_transforms = callbacks.get(CallBackTypes.POST_TRANSFORMS)
         callback_writer = callbacks.get(CallBackTypes.WRITER)
-        xml_path = f'{data["image_name"]}-patch-{data["location"][0]}_{data["location"][1]}_{data["size"][0]}_{data["size"][1]}.xml'
+        self.xml_path = f'{data["image_name"]}-patch-{data["location"][0]}_{data["location"][1]}_{data["size"][0]}_{data["size"][1]}.xml'
 
         start = time.time()
         pre_transforms = self.pre_transforms(data)
@@ -331,7 +331,7 @@ class BasicInferTask(InferTask):
         latency_invert = time.time() - start
 
         start = time.time()
-        data = self.run_post_transforms(data, self.post_transforms(data, xml_path))
+        data = self.run_post_transforms(data, self.post_transforms(data, self.xml_path))
         if callback_run_post_transforms:
             data = callback_run_post_transforms(data)
         latency_post = time.time() - start
@@ -528,7 +528,7 @@ class BasicInferTask(InferTask):
                 inputs = inputs.cpu().numpy()
                 inputs = inputs if isinstance(inputs, tf.Tensor) else tf.convert_to_tensor(inputs)
 
-                data[self.output_label_key] = custom_infere(inputs, configs, self.path)
+                data[self.output_label_key] = custom_infere(inputs, configs, self.path, self.xml_path)
         else:
             # consider them as callable transforms
             data = run_transforms(data, inferer, log_prefix="INF", log_name="Inferer")

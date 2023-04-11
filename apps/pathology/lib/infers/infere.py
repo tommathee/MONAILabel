@@ -6,6 +6,8 @@ import json
 import tensorflow as tf
 import albumentations as A
 
+from monailabel.transform.utils import xml2geojson, get_cell_mask
+
 
 def get_fragment(image, x, y, patch_size, fill_value=255):
     if len(image.shape) == 3:
@@ -96,6 +98,22 @@ def sliding_window(image, stepSize, windowSize):
             yield (x, y, image[y:y + windowSize[1], x:x + windowSize[0]])
 
 
+def get_gauss(image_size):
+    mid = image_size // 2
+    if image_size == 256:
+        step = 0.006
+    else:
+        step = 0.003
+
+    mat = np.zeros((image_size, image_size))
+    for i in range(image_size):
+        for j in range(image_size):
+            dist = max(abs(i - mid), abs(j - mid))
+            mat[i, j] = max(1 - dist * step, 0)
+
+    return np.expand_dims(mat, -1)
+
+
 def deeplab_infere(networks, data, configs):
     patch_size = configs[0]['image_size']
 
@@ -148,7 +166,7 @@ def deeplab_infere(networks, data, configs):
     return np.array(canvas > configs[0]['threshold'], dtype='uint8')
 
 
-def infere(network, data, config):
+def infere(network, data, config, cell_mask):
     patch_size = config['image_size']
     horizontal_flip = A.HorizontalFlip(p=1)
     vertical_flip = A.VerticalFlip(p=1)
@@ -166,11 +184,15 @@ def infere(network, data, config):
     for (x, y, window) in sliding_window(data, stepSize=patch_size // 2, windowSize=(patch_size, patch_size)):
         if window.shape[0] != patch_size or window.shape[1] != patch_size:
             window = get_fragment(window, x, y, patch_size, fill_value=1)
+            cell_mask_patch = get_fragment(cell_mask[y:y + patch_size, x:x +
+                                           patch_size], x, y, patch_size, fill_value=0)
+        else:
+            cell_mask_patch = cell_mask[y:y + patch_size, x:x + patch_size]
 
         window2 = tf.image.resize(window, [patch_size // 2, patch_size // 2], method='bilinear')
         # Pre ucely nahradenia segmentacie jadierok
         window = np.concatenate(
-            (window, np.zeros((window.shape[0], window.shape[1], 1))),
+            (window, np.expand_dims(cell_mask_patch, -1)),
             axis=-1
         )
         window = np.expand_dims(window, axis=0)
@@ -210,12 +232,14 @@ def infere(network, data, config):
     return np.array(canvas > config['threshold'], dtype='uint8')
 
 
-def main(directory='tmp'):
+def main(directory='tmp', xml_path=None):
     data = np.load(f'{directory}/data.npy', mmap_mode='r')
     with open(f'{directory}/configs.json') as f:
         configs = json.load(f)
     with open(f'{directory}/paths.json') as f:
         paths = json.load(f)
+    gj = xml2geojson(f'{xml_path}')
+    cell_mask = get_cell_mask(gj, data.shape)
 
     networks = []
     for idx, config in enumerate(configs):
@@ -226,7 +250,7 @@ def main(directory='tmp'):
     if len(networks) > 1:
         mask = deeplab_infere(networks, data, configs)
     else:
-        mask = infere(networks[0], data, configs[0])
+        mask = infere(networks[0], data, configs[0], cell_mask)
 
     np.save(f'{directory}/mask.npy', mask)
 
@@ -234,6 +258,7 @@ def main(directory='tmp'):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--directory', type=str, default='tmp')
+    parser.add_argument('--xml_path', type=str, default=None)
     args = parser.parse_args()
 
-    main(args.directory)
+    main(args.directory, args.xml_path)
