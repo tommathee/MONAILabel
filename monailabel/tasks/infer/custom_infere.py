@@ -14,6 +14,11 @@ def custom_infere(data, configs, paths, xml_path):
     result = os.system(
         f'python ./apps/pathology/lib/infers/infere.py --directory "{directory}" --xml_path "./datasets/labels/final/{xml_path}"')
 
+    if os.path.exists(f'./datasets/labels/final/{xml_path}'):
+        patch_name = xml_path.split('/')[-1].split('.')[0]
+        os.remove(f'./datasets/labels/final/{xml_path}')
+        os.remove(f'./datasets/{patch_name}.png')
+
     mask = np.load(f'{directory}/mask.npy')
     shutil.rmtree('tmp')
     return mask
