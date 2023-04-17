@@ -238,8 +238,12 @@ def main(directory='tmp', xml_path=None):
         configs = json.load(f)
     with open(f'{directory}/paths.json') as f:
         paths = json.load(f)
-    gj = xml2geojson(f'{xml_path}')
-    cell_mask = get_cell_mask(gj, data.shape)
+    try:
+        gj = xml2geojson(f'{xml_path}')
+        cell_mask = get_cell_mask(gj, data.shape)
+    except Exception:
+        print('No xml file found')
+        cell_mask = np.zeros_like(data)
 
     networks = []
     for idx, config in enumerate(configs):

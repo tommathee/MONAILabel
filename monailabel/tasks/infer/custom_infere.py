@@ -6,6 +6,8 @@ import json
 
 def custom_infere(data, configs, paths, xml_path):
     directory = 'tmp'
+    if os.path.exists(directory):
+        shutil.rmtree(directory)
     os.mkdir(directory)
     json.dump(configs, open(f'{directory}/configs.json', 'w'))
     json.dump(paths, open(f'{directory}/paths.json', 'w'))
@@ -19,6 +21,11 @@ def custom_infere(data, configs, paths, xml_path):
         os.remove(f'./datasets/labels/final/{xml_path}')
         os.remove(f'./datasets/{patch_name}.png')
 
-    mask = np.load(f'{directory}/mask.npy')
-    shutil.rmtree('tmp')
+    try:
+        mask = np.load(f'{directory}/mask.npy')
+        shutil.rmtree('tmp')
+    except:
+        shutil.rmtree('tmp')
+        raise Exception('Error with inference.')
+
     return mask
