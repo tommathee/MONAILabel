@@ -112,4 +112,4 @@ monailabel start_server --app apps/pathology --studies datasets/
 
 Pre výber anotácií, ktoré chceme vymazať je potrebné spustiť `Selection mode`, ktorý zvolíme možnosťou `S` nachádzajúcim sa v paneli. Po zapnutí `Selection mode` je možné využiť rôzne spôsoby výberu, či už s využitím obdĺžnika alebo pomocou štetca (brush). Pre zrušenie `Selection mode` kliknite opätovne možnosť `S`.
 
-![Background](docs/images/qupath/panel.png)
+![Background](docs/images/qupath/Panel.png)
