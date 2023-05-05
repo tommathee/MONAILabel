@@ -13,7 +13,9 @@ limitations under the License.
 
 package qupath.lib.extension.monailabel.commands;
 
-import java.awt.*;
+
+import java.awt.Color;
+import java.awt.Robot;
 import java.awt.event.KeyEvent;
 import java.io.FileOutputStream;
 
@@ -34,16 +36,7 @@ import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.OutputKeys;
 
-import javafx.application.Platform;
 import javafx.concurrent.Task;
-import javafx.scene.Scene;
-import javafx.scene.control.ProgressIndicator;
-import javafx.scene.input.KeyCode;
-
-import javafx.scene.layout.StackPane;
-
-import javafx.stage.Modality;
-import javafx.stage.Stage;
 import org.controlsfx.dialog.ProgressDialog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,7 +59,6 @@ import qupath.lib.images.ImageData;
 import qupath.lib.images.writers.ImageWriterTools;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.PathObjects;
-import qupath.lib.objects.PathROIObject;
 import qupath.lib.objects.classes.PathClass;
 import qupath.lib.objects.classes.PathClassFactory;
 import qupath.lib.plugins.parameters.ParameterList;
@@ -147,6 +139,7 @@ public class RunInference implements Runnable {
 
       ParameterList list = new ParameterList();
       list.addChoiceParameter("Model", "Model Name", selectedModel, names);
+      list.addBooleanParameter("ShowDetections", "Show previosly created detections?", false);
       list.addTitleParameter("Parameters of selected ROI:");
       if (isWSI) {
         list.addEmptyParameter("(do not change, if not necessary)");
@@ -168,6 +161,7 @@ public class RunInference implements Runnable {
 
       if (Dialogs.showParameterDialog("MONAILabel", list)) {
         String model = (String) list.getChoiceParameterValue("Model");
+        boolean showDetections = list.getBooleanParameterValue("ShowDetections");
         if (isWSI) {
           bbox = Utils.parseStringArray(list.getStringParameterValue("Location"));
           tileSize = list.getIntParameterValue("TileSize").intValue();
@@ -194,7 +188,7 @@ public class RunInference implements Runnable {
 
         ProgressDialog progressDialog = new ProgressDialog(task);
         progressDialog.setTitle("MONAILabel");
-        progressDialog.setHeaderText("Server-side processing is in progress...");
+        progressDialog.setHeaderText("Server-side processing is in progress, please wait...");
         progressDialog.initOwner(qupath.getStage());
 
         // Start the task
@@ -203,6 +197,8 @@ public class RunInference implements Runnable {
         // Wait for the task to finish
         task.setOnSucceeded(event -> {
           progressDialog.close();
+          qupath.getOverlayOptions().showDetectionsProperty().set(showDetections);
+
           // Autosave project
           try {
             Robot robot = new Robot();
