@@ -24,7 +24,7 @@
         "task_handler": {
             "class": "logging.handlers.RotatingFileHandler",
             "formatter": "single",
-            "filename": "C:\\Users\\ivanv\\Desktop\\Ivan\\FIIT\\02_ING\\MONAI\\MONAILabel\\apps\\pathology\\logs\\app.log",
+            "filename": "C:\\FIIT\\8-semester\\BP\\monai-vykopal\\MONAILabel\\apps\\pathology\\logs\\app.log",
             "backupCount": 10,
             "maxBytes": 10485760,
             "encoding": "utf-8"
@@ -32,7 +32,7 @@
         "file_handler": {
             "class": "logging.handlers.RotatingFileHandler",
             "formatter": "simple",
-            "filename": "C:\\Users\\ivanv\\Desktop\\Ivan\\FIIT\\02_ING\\MONAI\\MONAILabel\\apps\\pathology\\logs\\app.log",
+            "filename": "C:\\FIIT\\8-semester\\BP\\monai-vykopal\\MONAILabel\\apps\\pathology\\logs\\app.log",
             "backupCount": 10,
             "maxBytes": 10485760,
             "encoding": "utf-8"
