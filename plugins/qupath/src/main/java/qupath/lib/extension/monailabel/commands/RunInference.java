@@ -95,7 +95,7 @@ public class RunInference implements Runnable {
 
       if (roi == null || !(roi instanceof RectangleROI)) {
         Dialogs.showPlainMessage("Please create and select ROI", "Please create and select a Rectangle ROI before " +
-                "running this method.\nThe \"Annotations\" function creates annotations within the rectangle.");
+                "running this method.\nThe \"Annotations\" function creates annotations within the selected rectangle.");
         return;
       }
 
@@ -139,7 +139,7 @@ public class RunInference implements Runnable {
 
       ParameterList list = new ParameterList();
       list.addChoiceParameter("Model", "Model Name", selectedModel, names);
-      list.addBooleanParameter("ShowDetections", "Show previosly created detections?", false);
+      list.addBooleanParameter("ShowDetections", "Show previosly created detections", false);
       list.addTitleParameter("Parameters of selected ROI:");
       if (isWSI) {
         list.addEmptyParameter("(do not change, if not necessary)");
@@ -191,10 +191,9 @@ public class RunInference implements Runnable {
         progressDialog.setHeaderText("Server-side processing is in progress, please wait...");
         progressDialog.initOwner(qupath.getStage());
 
-        // Start the task
+        // Start the inference
         new Thread(task).start();
 
-        // Wait for the task to finish
         task.setOnSucceeded(event -> {
           progressDialog.close();
           qupath.getOverlayOptions().showDetectionsProperty().set(showDetections);
@@ -542,23 +541,4 @@ public class RunInference implements Runnable {
 
     return count;
   }
-
-  /*
-  private void addUndoConfirmationListener(Stage stage) {
-    stage.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
-      if (event.isControlDown() && event.getCode() == KeyCode.Z || event.isMetaDown() && event.getCode() == KeyCode.Z) {
-        event.consume(); // Prevent the original event from being processed further
-
-        // Show a confirmation dialog
-        boolean shouldUndo = Dialogs.showYesNoDialog("Undo Confirmation",
-                "Are you sure you want to undo the last action? This might delete or modify your annotations.");
-        if (shouldUndo) {
-          // If the user confirms, perform the undo action
-          qupath.getUndoRedoManager().undoOnce();
-        }
-      }
-    });
-  }
-
-   */
 }

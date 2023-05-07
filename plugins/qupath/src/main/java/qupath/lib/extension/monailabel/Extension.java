@@ -60,7 +60,7 @@ public class Extension implements QuPathExtension {
 
 		MenuTools.addMenuItems(qupath.getMenu("MONAI Label", true), ActionUtils.ACTION_SEPARATOR);
 
-		var runInfer = ActionTools.createAction(new RunInference(qupath), "Annotations...");
+		var runInfer = ActionTools.createAction(new RunInference(qupath), "Create annotations...");
 		runInfer.setAccelerator(KeyCombination.keyCombination("ctrl+m"));
 		runInfer.disabledProperty().bind(qupath.imageDataProperty().isNull());
 		MenuTools.addMenuItems(qupath.getMenu("MONAI Label", true), runInfer);
