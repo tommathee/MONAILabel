@@ -13,7 +13,6 @@ limitations under the License.
 
 package qupath.lib.extension.monailabel.commands;
 
-
 import java.awt.Color;
 import java.awt.Robot;
 import java.awt.event.KeyEvent;
@@ -23,8 +22,12 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -189,6 +192,7 @@ public class RunInference implements Runnable {
         ProgressDialog progressDialog = new ProgressDialog(task);
         progressDialog.setTitle("MONAILabel");
         progressDialog.setHeaderText("Server-side processing is in progress, please wait...");
+        progressDialog.setContentText("Annotations will be drawn immediately after the method ends.");
         progressDialog.initOwner(qupath.getStage());
 
         // Start the inference
